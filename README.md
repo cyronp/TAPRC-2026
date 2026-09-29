@@ -19,6 +19,10 @@ O projeto é composto por Azure Functions desenvolvidas para demonstrar o uso de
 <details>
 <summary>1. Timer Trigger - Log Simples</summary>
 
+### Estrutura Projeto
+
+![Project Structure](https://github.com/cyronp/TAPRC-2026/blob/2f4bfde49ba9354d4fcb0957baa44c346df44499/Structure_Image.png)
+
 ### Descrição
 Função executada automaticamente em intervalos definidos via expressão CRON.
 
