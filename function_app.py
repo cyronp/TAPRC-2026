@@ -44,14 +44,35 @@ def timer_trigger_chamado(myTimer: func.TimerRequest) -> None:
 
     connection = None
     try:
+
         connection = pyodbc.connect(connection_string, timeout=30)
         cursor = connection.cursor()
-        cursor.execute("SELECT TOP (3) * FROM [itsm].[chamado]")
-        colunas = [coluna[0] for coluna in cursor.description]
-        chamados = cursor.fetchall()
-        logging.info('Consulta retornou %s chamado(s).', len(chamados))
-        for chamado in chamados:
-            logging.info('Chamado: %s', dict(zip(colunas, chamado)))
+
+        def consultar_dados(tabela):
+            cursor.execute(f"SELECT TOP (3) * FROM [itsm].[{tabela}]")
+            colunas = [coluna[0] for coluna in cursor.description]
+            dados = cursor.fetchall()
+            
+            logging.info('CONSULTANDO DADOS DA TABELA: %s', tabela)
+            logging.info('Consulta retornou %s dados(s).', len(dados))
+            for dado in dados:
+                logging.info('%s: %s', tabela, dict(zip(colunas, dado)))
+
+
+        # SELECT DA TABELA CHAMADO
+        consultar_dados("chamado") 
+
+        logging.info("-")
+
+        # SELECT DA TABELA ANALISTA
+        consultar_dados("analista") 
+
+        logging.info("-")
+
+        # SELECT DA TABELA CATEGORIA
+        consultar_dados("categoria") 
+
+
     except Exception:
         logging.exception('Erro ao consultar os chamados.')
         raise
