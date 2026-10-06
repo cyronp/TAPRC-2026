@@ -71,6 +71,18 @@ def timer_trigger_chamado(myTimer: func.TimerRequest) -> None:
 
         # SELECT DA TABELA CATEGORIA
         consultar_dados("categoria") 
+         
+        logging.info("-")
+
+        # SELECT DA TABELA CHAMADO_SLA
+        consultar_dados("chamado_sla")
+
+        logging.info("-")
+
+        # SELECT DA TABELA chamado_status_historico
+        consultar_dados("chamado_status_historico")
+         
+        logging.info("-")
 
 
     except Exception:
