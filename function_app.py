@@ -84,6 +84,21 @@ def timer_trigger_chamado(myTimer: func.TimerRequest) -> None:
          
         logging.info("-")
 
+        # SELECT DA TABELA ccliente_organizacao
+        consultar_dados("cliente_organizacao")
+         
+        logging.info("-")
+
+        # SELECT DA TABELA csat_avaliacao
+        consultar_dados("csat_avaliacao")
+         
+        logging.info("-")
+
+        # SELECT DA TABELA fila
+        consultar_dados("fila")
+         
+        logging.info("-")
+
 
     except Exception:
         logging.exception('Erro ao consultar os chamados.')
