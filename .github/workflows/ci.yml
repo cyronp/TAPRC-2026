@@ -11,3 +11,11 @@ jobs:
       - uses: actions/checkout@v4
       - run: python3 --version
       - run: python3 -m py_compile function_app.py
+  
+  formatar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+      - run: pip install black
+      - run: black --check
