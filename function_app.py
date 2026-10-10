@@ -9,7 +9,7 @@ app = func.FunctionApp()
 @app.timer_trigger(schedule="0 * * * * *", arg_name="myTimer", run_on_startup=False,
               use_monitor=False) 
 def timer_trigger_tipo1(myTimer: func.TimerRequest) -> None:
-    if myTimer.past_due:
+if myTimer.past_due:
         logging.info('O temporizador está atrasado!')
 
     logging.info('Função de temporizador executada.')
