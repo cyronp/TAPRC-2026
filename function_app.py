@@ -36,7 +36,7 @@ def extract_chamado(myTimer: func.TimerRequest) -> None:
     try:
         with pyodbc.connect(conn_str) as conn:
             cursor = conn.cursor()
-            query = "selec1chamado"
+            query = "select * from chamado"
             cursor.execute(query)
             rows = cursor.fetchall()
             columns = [col[0] for col in cursor.description]
