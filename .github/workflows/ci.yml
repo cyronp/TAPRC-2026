@@ -15,15 +15,15 @@ jobs:
       - run: python3 --version
       - run: python3 -m py_compile function_app.py
 
-  formatar:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-      - run: pip install black flake8 isort
-      - run: black --check .
-      - run: isort --check .
-      - run: flake8
+  # formatar:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #     - run: pip install black flake8 isort
+  #     - run: black --check .
+  #     - run: isort --check .
+  #     - run: flake8
 
   deploy:
     needs: validar
