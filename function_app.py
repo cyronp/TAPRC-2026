@@ -122,7 +122,7 @@ def extract_analista(myTimer: func.TimerRequest) -> None:
 @app.timer_trigger(
     schedule="0 * * * * *", arg_name="myTimer", run_on_startup=False, use_monitor=False
 )
-def extract_analista(myTimer: func.TimerRequest) -> None:
+def extract_categoria(myTimer: func.TimerRequest) -> None:
     logging.info("tabela categoria")
 
     sql_server = os.getenv("HOST")
