@@ -68,5 +68,11 @@ def extract_tables(myTimer: func.TimerRequest) -> None:
             raise
         
     extract_tables_storage("chamado_sla")
+    extract_tables_storage("chamado_status_historico")
+    extract_tables_storage("cliente_organizacao")
+    extract_tables_storage("csat_avaliacao")
+    extract_tables_storage("fila")
+    extract_tables_storage("sla")
+    extract_tables_storage("solicitante")
     
     
