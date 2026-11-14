@@ -291,12 +291,16 @@ def carregar_tabela(conn, fs, tabela):
 
 @app.timer_trigger(schedule="0 15 * * * *", arg_name="myTimer", run_on_startup=False)
 def load_tables(myTimer: func.TimerRequest) -> None:
+    logging.info("Iniciando...")
     datalake = DataLakeServiceClient.from_connection_string(
         os.getenv("DATALAKE_CONNECTION_STRING")
     )
+    logging.info("Iniciar datalake.get_file...")
     fs = datalake.get_file_system_client(CONTAINER)
 
+    logging.info("Inicia conexão...")
     conn = pyodbc.connect(get_conn_str(), autocommit=False)
+    logging.info("Aqui começa o try")
     try:
         for tabela in ORDEM_CARGA:
             try:
