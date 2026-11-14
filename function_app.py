@@ -304,6 +304,7 @@ def load_tables(myTimer: func.TimerRequest) -> None:
     fs = datalake.get_file_system_client(CONTAINER)
 
     logging.info("Inicia conexão...")
+    logging.info(get_conn_str())
     conn = pyodbc.connect(get_conn_str(), autocommit=False)
     logging.info("Aqui começa o try")
     try:
