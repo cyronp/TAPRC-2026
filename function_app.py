@@ -13,7 +13,7 @@ app = func.FunctionApp()
 
 
 @app.timer_trigger(
-    schedule="0 * * * * *", arg_name="myTimer", run_on_startup=False, use_monitor=False
+    schedule="0 0 * * * *", arg_name="myTimer", run_on_startup=False, use_monitor=False
 )
 def extract_tables(myTimer: func.TimerRequest) -> None:
     
@@ -296,6 +296,18 @@ def load_tables(myTimer: func.TimerRequest) -> None:
         logging.info(
             f"{tabela}: {arquivo} -> {len(linhas)} linhas lidas, {afetadas} inseridas/atualizadas"
         )
+    
+    import time
+
+    def conectar():
+        for tentativa in range(1, 4):
+            try:
+                return pyodbc.connect(get_conn_str(), autocommit=False)
+            except pyodbc.Error as e:
+                logging.error(f"Falha ao conectar (tentativa {tentativa}/3): {e}")
+                if tentativa == 3:
+                    raise
+                time.sleep(20)
         
     datalake = DataLakeServiceClient.from_connection_string(
         os.getenv("DATALAKE_CONNECTION_STRING")
@@ -304,8 +316,8 @@ def load_tables(myTimer: func.TimerRequest) -> None:
     fs = datalake.get_file_system_client(CONTAINER)
 
     logging.info("Inicia conexão...")
-    logging.info(get_conn_str())
-    conn = pyodbc.connect(get_conn_str(), autocommit=False)
+    logging.info(f"Conectando em {os.getenv('HOST')} / {os.getenv('DATABASE')}")
+    conn = conectar()
     logging.info("Aqui começa o try")
     try:
         for tabela in ORDEM_CARGA:
