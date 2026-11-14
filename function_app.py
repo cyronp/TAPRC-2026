@@ -124,10 +124,10 @@ SELECT c.name,
 def get_conn_str():
     return (
         "DRIVER={ODBC Driver 18 for SQL Server};"
-        f"SERVER={os.getenv('HOST_DESTINO')};"
-        f"DATABASE={os.getenv('DATABASE_DESTINO')};"
-        f"UID={os.getenv('USER_DESTINO')};"
-        f"PWD={os.getenv('PASSWORD_DESTINO')};"
+        f"SERVER={os.getenv('HOST')};"
+        f"DATABASE={os.getenv('DATABASE')};"
+        f"UID={os.getenv('USER')};"
+        f"PWD={os.getenv('PASSWORD')};"
         "Encrypt=yes;"
         "TrustServerCertificate=no;"
         "Connection Timeout=30;"
