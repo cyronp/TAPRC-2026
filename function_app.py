@@ -2,12 +2,15 @@ import csv
 import io
 import logging
 import os
+import time
 from datetime import datetime, timezone
-import re
 
 import pyodbc
 import azure.functions as func
 from azure.storage.filedatalake import DataLakeServiceClient
+
+# Silencia os logs HTTP detalhados do SDK do Azure (headers 'REDACTED' etc.)
+logging.getLogger("azure").setLevel(logging.WARNING)
 
 app = func.FunctionApp()
 
@@ -16,9 +19,9 @@ app = func.FunctionApp()
     schedule="0 0 * * * *", arg_name="myTimer", run_on_startup=False, use_monitor=False
 )
 def extract_tables(myTimer: func.TimerRequest) -> None:
-    
+
     def extract_tables_storage(table):
-        
+
         logging.info(f"tabela {table}")
 
         sql_server = os.getenv("HOST_PROF")
@@ -26,11 +29,9 @@ def extract_tables(myTimer: func.TimerRequest) -> None:
         sql_user = os.getenv("USER_PROF")
         sql_pass = os.getenv("PASSWORD_PROF")
 
-        logging.info(
-            f"servidor={sql_server}, banco de dados={sql_database}, usuario={sql_user}, senha={sql_pass} "
-        )
+        # Nunca logar a senha
+        logging.info(f"servidor={sql_server}, banco de dados={sql_database}, usuario={sql_user}")
 
-        # Configura a string de conexão para o banco de dados SQL Server
         conn_str = (
             "DRIVER={ODBC Driver 18 for SQL Server};"
             f"SERVER={sql_server};"
@@ -67,7 +68,7 @@ def extract_tables(myTimer: func.TimerRequest) -> None:
         except Exception as e:
             logging.error(f"Erro ao ler itsm.{table}: {str(e)}")
             raise
-        
+
     extract_tables_storage("chamado_sla")
     extract_tables_storage("chamado_status_historico")
     extract_tables_storage("cliente_organizacao")
@@ -78,10 +79,6 @@ def extract_tables(myTimer: func.TimerRequest) -> None:
     extract_tables_storage("categoria")
     extract_tables_storage("analista")
     extract_tables_storage("chamado")
-    
-    
-    
-
 
 
 @app.timer_trigger(
@@ -89,10 +86,11 @@ def extract_tables(myTimer: func.TimerRequest) -> None:
 )
 def load_tables(myTimer: func.TimerRequest) -> None:
     logging.info("Iniciando...")
-    
+
     SCHEMA = "itsm"
     CONTAINER = "bronze"
 
+    # Ordem de carga: tabelas "pai" antes das "filhas" por causa das FOREIGN KEYs
     ORDEM_CARGA = [
         "categoria",
         "cliente_organizacao",
@@ -129,7 +127,6 @@ def load_tables(myTimer: func.TimerRequest) -> None:
     ORDER BY c.column_id
     """
 
-
     def get_conn_str():
         return (
             "DRIVER={ODBC Driver 18 for SQL Server};"
@@ -142,15 +139,25 @@ def load_tables(myTimer: func.TimerRequest) -> None:
             "Connection Timeout=30;"
         )
 
+    def conectar():
+        for tentativa in range(1, 4):
+            try:
+                return pyodbc.connect(get_conn_str(), autocommit=False)
+            except pyodbc.Error as e:
+                logging.error(f"Falha ao conectar (tentativa {tentativa}/3): {e}")
+                if tentativa == 3:
+                    raise
+                time.sleep(20)
 
     def obter_mais_recente(fs, tabela):
+        """Cada CSV traz a tabela inteira, então só o último interessa."""
         arquivos = [
             p.name
             for p in fs.get_paths(path=tabela, recursive=True)
             if not p.is_directory and p.name.endswith(".csv")
         ]
+        # tabela/AAAA/MM/DD/tabela_AAAAMMDD_HHMMSS.csv -> o maior nome é o mais recente
         return max(arquivos) if arquivos else None
-
 
     def ler_csv(fs, caminho):
         conteudo = fs.get_file_client(caminho).download_file().readall().decode("utf-8")
@@ -159,7 +166,6 @@ def load_tables(myTimer: func.TimerRequest) -> None:
         reader = csv.reader(io.StringIO(conteudo, newline=""))
         colunas = next(reader)
         return colunas, list(reader)
-
 
     def obter_metadados(cursor, tabela):
         cursor.execute(SQL_METADADOS, f"{SCHEMA}.{tabela}")
@@ -177,10 +183,11 @@ def load_tables(myTimer: func.TimerRequest) -> None:
             raise ValueError(f"Tabela {SCHEMA}.{tabela} não existe no banco de destino")
         return meta
 
-
     def tratar_valor(coluna, valor, info):
         valor = valor.strip()
         if valor == "":
+            # o csv.writer grava None como "", então vazio volta a ser NULL,
+            # exceto em coluna de texto NOT NULL (onde "" é um valor válido)
             if info["tipo"] in TIPOS_TEXTO and not info["nullable"]:
                 return ""
             return None
@@ -190,10 +197,7 @@ def load_tables(myTimer: func.TimerRequest) -> None:
             return valor.upper()
         if coluna in COLUNAS_LOWER:
             return valor.lower()
-        if coluna in COLUNAS_SO_DIGITOS:
-            return re.sub(r"\D", "", valor)
         return valor
-
 
     def tratar(colunas_csv, linhas, meta, arquivo):
         pk = [c for c, info in meta.items() if info["pk"]]
@@ -219,12 +223,13 @@ def load_tables(myTimer: func.TimerRequest) -> None:
             chave = tuple(registro[i] for i in idx_pk)
             if any(k is None for k in chave):
                 raise ValueError(f"{arquivo}: linha {n} sem valor na PK {pk}")
-            unicos[chave] = registro
+            unicos[chave] = registro  # ID repetido no arquivo: fica a última ocorrência
 
         if len(unicos) < len(linhas):
-            logging.warning(f"{arquivo}: {len(linhas) - len(unicos)} linha(s) com ID repetido removida(s)")
+            logging.warning(
+                f"{arquivo}: {len(linhas) - len(unicos)} linha(s) com ID repetido removida(s)"
+            )
         return colunas, pk, list(unicos.values())
-
 
     def montar_merge(tabela_sql, colunas, pk):
         nao_pk = [c for c in colunas if c not in pk]
@@ -237,6 +242,7 @@ def load_tables(myTimer: func.TimerRequest) -> None:
             s_cols = ", ".join(f"s.[{c}]" for c in nao_pk)
             t_cols = ", ".join(f"t.[{c}]" for c in nao_pk)
             sets = ", ".join(f"t.[{c}] = s.[{c}]" for c in nao_pk)
+            # só atualiza se alguma coluna mudou (EXCEPT considera NULL = NULL)
             update = (
                 f"WHEN MATCHED AND EXISTS (SELECT {s_cols} EXCEPT SELECT {t_cols}) "
                 f"THEN UPDATE SET {sets}"
@@ -250,7 +256,6 @@ def load_tables(myTimer: func.TimerRequest) -> None:
             WHEN NOT MATCHED BY TARGET THEN
                 INSERT ({cols}) VALUES ({vals});
         """
-
 
     def carregar_tabela(conn, fs, tabela):
         arquivo = obter_mais_recente(fs, tabela)
@@ -267,6 +272,7 @@ def load_tables(myTimer: func.TimerRequest) -> None:
         tabela_sql = f"[{SCHEMA}].[{tabela}]"
         cols = ", ".join(f"[{c}]" for c in colunas)
 
+        # 1) staging temporária (tudo texto; o SQL Server converte os tipos no MERGE)
         cursor.execute("DROP TABLE IF EXISTS #stg")
         cursor.execute(
             "CREATE TABLE #stg ("
@@ -282,6 +288,7 @@ def load_tables(myTimer: func.TimerRequest) -> None:
                 f"INSERT INTO #stg ({cols}) VALUES ({', '.join('?' * len(colunas))})", linhas
             )
 
+        # 2) MERGE pelo ID, mantendo os IDs da origem (as FKs dependem deles)
         tem_identity = any(meta[c]["identity"] for c in colunas)
         if tem_identity:
             cursor.execute(f"SET IDENTITY_INSERT {tabela_sql} ON")
@@ -296,29 +303,14 @@ def load_tables(myTimer: func.TimerRequest) -> None:
         logging.info(
             f"{tabela}: {arquivo} -> {len(linhas)} linhas lidas, {afetadas} inseridas/atualizadas"
         )
-    
-    import time
 
-    def conectar():
-        for tentativa in range(1, 4):
-            try:
-                return pyodbc.connect(get_conn_str(), autocommit=False)
-            except pyodbc.Error as e:
-                logging.error(f"Falha ao conectar (tentativa {tentativa}/3): {e}")
-                if tentativa == 3:
-                    raise
-                time.sleep(20)
-        
     datalake = DataLakeServiceClient.from_connection_string(
         os.getenv("DATALAKE_CONNECTION_STRING")
     )
-    logging.info("Iniciar datalake.get_file...")
     fs = datalake.get_file_system_client(CONTAINER)
 
-    logging.info("Inicia conexão...")
     logging.info(f"Conectando em {os.getenv('HOST')} / {os.getenv('DATABASE')}")
     conn = conectar()
-    logging.info("Aqui começa o try")
     try:
         for tabela in ORDEM_CARGA:
             try:
@@ -326,6 +318,9 @@ def load_tables(myTimer: func.TimerRequest) -> None:
             except Exception:
                 conn.rollback()
                 logging.exception(f"Erro ao carregar {SCHEMA}.{tabela}")
+                # Para aqui: as próximas tabelas podem depender desta pelas FKs.
                 raise
     finally:
         conn.close()
+
+    logging.info("Carga finalizada com sucesso")
